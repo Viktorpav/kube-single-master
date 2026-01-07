@@ -1,0 +1,26 @@
+- name: Install/upgrade MetalLB
+  kubernetes.core.helm:
+    name: metallb
+    chart_ref: metallb/metallb
+    release_namespace: metallb-system
+    create_namespace: true
+    wait: true
+    timeout: 600s
+  register: metallb_install
+
+- name: Configure MetalLB IP pool and L2 advertisement
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      - apiVersion: metallb.io/v1beta1
+        kind: IPAddressPool
+        metadata:
+          name: default-pool
+          namespace: metallb-system
+        spec:
+          addresses: ["192.168.0.240-192.168.0.250"]
+      - apiVersion: metallb.io/v1beta1
+        kind: L2Advertisement
+        metadata:
+          name: l2
+          namespace: metallb-system

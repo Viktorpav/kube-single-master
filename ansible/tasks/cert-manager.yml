@@ -1,0 +1,71 @@
+- name: Install cert-manager
+  kubernetes.core.helm:
+    name: cert-manager
+    chart_ref: jetstack/cert-manager
+    release_namespace: cert-manager
+    create_namespace: true
+    binary_path: /usr/local/bin/helm
+    values:
+      installCRDs: true
+
+- name: Wait for all cert-manager pods ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: cert-manager
+  register: cert_manager_pods
+  until: cert_manager_pods.resources | selectattr('status.phase', 'equalto', 'Running') | list | length >= 3
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Create SelfSigned Bootstrap Issuer
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: selfsigned-bootstrap
+      spec:
+        selfSigned: {}
+
+- name: Create Internal Root CA Certificate
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: cert-manager.io/v1
+      kind: Certificate
+      metadata:
+        name: iooding-root-ca
+        namespace: cert-manager
+      spec:
+        isCA: true
+        commonName: iooding-internal-ca
+        secretName: iooding-root-ca-secret
+        privateKey:
+          algorithm: ECDSA
+          size: 256
+        issuerRef:
+          name: selfsigned-bootstrap
+          kind: ClusterIssuer
+          group: cert-manager.io
+
+- name: Create Pro Cluster Issuer (CA)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: iooding-ca-issuer
+      spec:
+        ca:
+          secretName: iooding-root-ca-secret
+
+- name: Install External Secrets Operator
+  kubernetes.core.helm:
+    name: external-secrets
+    chart_ref: external-secrets/external-secrets
+    release_namespace: external-secrets
+    create_namespace: true
+    binary_path: /usr/local/bin/helm

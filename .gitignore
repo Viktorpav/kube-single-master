@@ -1,0 +1,26 @@
+# Distribution / packaging
+.Python
+env/
+.env
+*.sqlite3
+.idea/
+media
+db.sqlite3# Editor directories and files
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+*.pem
+# Terraform for regular infrastructure
+.terraform/
+*.tfstate
+*.tfstate.*
+# Terrafrom K8s baremetal infrastructure
+.terraform/
+*.tfstate
+*.tfstate.*
+# VM iso and related
+mac-vms/ubuntu-22.04.5-live-server-arm64.iso
+# Inventory files
+inventory.ini
+terraform/vars/common.yml

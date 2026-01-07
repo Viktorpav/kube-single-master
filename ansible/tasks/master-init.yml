@@ -1,0 +1,33 @@
+---
+# Initialize single-master Kubernetes cluster
+- name: Check if cluster is already initialized
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: cluster_initialized
+
+- name: Initialize Kubernetes cluster
+  command: >
+    kubeadm init
+    --pod-network-cidr=10.244.0.0/16
+    --cri-socket unix:///run/containerd/containerd.sock
+  args:
+    creates: /etc/kubernetes/admin.conf
+  register: kubeadm_init
+  when: not cluster_initialized.stat.exists
+
+- name: Create .kube directory for ubuntu
+  ansible.builtin.file:
+    path: "/home/ubuntu/.kube"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Copy admin kubeconfig for ubuntu user
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: "/home/ubuntu/.kube/config"
+    remote_src: yes
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"

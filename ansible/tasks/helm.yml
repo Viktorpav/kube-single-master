@@ -1,0 +1,24 @@
+- name: Install Helm
+  ansible.builtin.shell: "curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash"
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Install helm-diff plugin
+  ansible.builtin.command: /usr/local/bin/helm plugin install https://github.com/databus23/helm-diff
+  args:
+    creates: /root/.local/share/helm/plugins/helm-diff/plugin.yaml
+
+- name: Add Helm repos
+  kubernetes.core.helm_repository:
+    name: "{{ item.name }}"
+    repo_url: "{{ item.url }}"
+    binary_path: /usr/local/bin/helm
+    force_update: yes
+  loop:
+    - { name: ingress-nginx, url: "https://kubernetes.github.io/ingress-nginx" }
+    - { name: metallb, url: "https://metallb.github.io/metallb" }
+    - { name: external-secrets, url: "https://charts.external-secrets.io" }
+    - { name: argo, url: "https://argoproj.github.io/argo-helm" }
+    - { name: longhorn, url: "https://charts.longhorn.io" }
+    - { name: jetstack, url: "https://charts.jetstack.io" }
+  changed_when: false

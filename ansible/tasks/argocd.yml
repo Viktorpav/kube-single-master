@@ -1,0 +1,227 @@
+- name: Install ArgoCD (node-failure safe, single Redis)
+  kubernetes.core.helm:
+    name: argocd
+    chart_ref: argo/argo-cd
+    release_namespace: argocd
+    create_namespace: true
+    wait: false
+    disable_hook: true
+    values:
+      controller:
+        kind: Deployment
+        replicas: 1
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
+      server:
+        replicas: 1
+        extraArgs:
+          - --insecure
+        podAntiAffinity:
+          type: soft
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
+      repoServer:
+        replicas: 1
+        podAntiAffinity:
+          type: soft
+        livenessProbe:
+          timeoutSeconds: 10
+          initialDelaySeconds: 30
+        readinessProbe:
+          timeoutSeconds: 10
+          initialDelaySeconds: 30
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
+      applicationSet:
+        replicas: 1
+        podAntiAffinity:
+          type: soft
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
+      notifications:
+        replicas: 1
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
+      dex:
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
+      redis:
+        enabled: true
+        persistence:
+          enabled: true
+          storageClass: longhorn
+          size: 1Gi
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: argocd-redis
+
+      redis-ha:
+        enabled: false
+
+- name: ArgoCD PodDisruptionBudgets (node failure safe)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      - apiVersion: policy/v1
+        kind: PodDisruptionBudget
+        metadata:
+          name: argocd-core-pdb
+          namespace: argocd
+        spec:
+          minAvailable: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/part-of: argocd
+
+      - apiVersion: policy/v1
+        kind: PodDisruptionBudget
+        metadata:
+          name: argocd-redis-pdb
+          namespace: argocd
+        spec:
+          minAvailable: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-redis
+
+- name: Configure ArgoCD (Project, App, Ingress)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      - apiVersion: argoproj.io/v1alpha1
+        kind: AppProject
+        metadata:
+          name: iooding
+          namespace: argocd
+        spec:
+          sourceRepos: ["*"]
+          destinations:
+            - namespace: "*"
+              server: "*"
+          clusterResourceWhitelist:
+            - group: "*"
+              kind: "*"
+
+      - apiVersion: argoproj.io/v1alpha1
+        kind: Application
+        metadata:
+          name: iooding-blog
+          namespace: argocd
+          finalizers:
+            - resources-finalizer.argocd.argoproj.io
+        spec:
+          project: iooding
+          source:
+            repoURL: https://github.com/Viktorpav/iooding.git
+            targetRevision: master
+            path: k8s/manifests
+          destination:
+            server: https://kubernetes.default.svc
+            namespace: iooding
+          syncPolicy:
+            automated:
+              prune: true
+              selfHeal: true
+            syncOptions:
+              - CreateNamespace=true
+
+      - apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+          name: argocd-ingress
+          namespace: argocd
+          annotations:
+            cert-manager.io/cluster-issuer: "iooding-ca-issuer"
+            nginx.ingress.kubernetes.io/ssl-redirect: "true"
+            nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+            nginx.ingress.kubernetes.io/configuration-snippet: |
+              add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+              add_header X-Frame-Options "DENY" always;
+              add_header X-Content-Type-Options "nosniff" always;
+              add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+              add_header Content-Security-Policy "frame-ancestors 'none';" always;
+        spec:
+          ingressClassName: nginx
+          tls:
+            - hosts:
+                - argocd.local
+              secretName: argocd-server-tls
+          rules:
+            - host: argocd.local
+              http:
+                paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                      service:
+                        name: argocd-server
+                        port:
+                          number: 80
+  ignore_errors: true

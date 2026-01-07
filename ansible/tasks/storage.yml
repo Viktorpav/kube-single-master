@@ -1,0 +1,121 @@
+- name: Create AWS secret for backups (must exist for Longhorn validation)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: aws-secret
+        namespace: longhorn-system
+      stringData:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_REGION: "{{ aws_region }}"
+
+- name: Install/upgrade Longhorn
+  kubernetes.core.helm:
+    name: longhorn
+    chart_ref: longhorn/longhorn
+    release_namespace: longhorn-system
+    create_namespace: true
+    wait: false
+    values:
+      defaultSettings:
+        defaultReplicaCount: "{{ longhorn_replicas }}"
+        replicaSoftAntiAffinity: true
+        backupTarget: "s3://{{ longhorn_s3_bucket }}@{{ aws_region }}/"
+        backupTargetCredentialSecret: aws-secret
+        allowRecurringJobWhileVolumeDetached: true
+        autoCleanupSystemGeneratedSnapshot: true
+        backupstorePollInterval: 30
+      longhornManager:
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+      ui:
+        replicas: 2
+        tolerations:
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+      persistence:
+        defaultClass: true
+
+- name: Wait for Longhorn manager to be ready (prevents webhook errors)
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: longhorn-system
+    label_selectors:
+      - app=longhorn-manager
+  register: longhorn_manager_pods
+  until: >
+    longhorn_manager_pods.resources | length >= 1 and
+    (longhorn_manager_pods.resources | map(attribute='status.phase') | list | unique) == ['Running']
+  retries: 30
+  delay: 10
+
+- name: Create Ingress for Longhorn UI
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: longhorn-ui
+        namespace: longhorn-system
+        annotations:
+          cert-manager.io/cluster-issuer: "iooding-ca-issuer"
+          nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+          nginx.ingress.kubernetes.io/configuration-snippet: |
+            add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+            add_header X-Frame-Options "DENY" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+            add_header Content-Security-Policy "frame-ancestors 'none';" always;
+      spec:
+        ingressClassName: nginx
+        tls:
+          - hosts:
+              - longhorn.local
+            secretName: longhorn-tls
+        rules:
+          - host: longhorn.local
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: longhorn-frontend
+                      port:
+                        number: 80
+
+- name: Create Recurring Backup Job (Default for all volumes)
+  kubernetes.core.k8s:
+    state: present
+    definition: |
+      apiVersion: longhorn.io/v1beta2
+      kind: RecurringJob
+      metadata:
+        name: backup-daily
+        namespace: longhorn-system
+      spec:
+        cron: "{{ backup_daily_cron }}"
+        task: backup
+        retain: {{ backup_daily_retain }}
+        concurrency: 2
+        groups:
+          - default
+        labels:
+          backup: daily

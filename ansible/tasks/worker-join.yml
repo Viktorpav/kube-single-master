@@ -1,0 +1,34 @@
+- name: Check if node already joined
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: node_check
+
+- name: Get join command from master
+  command: kubeadm token create --print-join-command
+  register: join_cmd
+  delegate_to: "{{ groups['k8s_masters'][0] }}"
+  run_once: true
+  changed_when: false
+
+- name: Join worker to cluster
+  command: "{{ hostvars[groups['k8s_masters'][0]]['join_cmd'].stdout }}"
+  when: not node_check.stat.exists
+  register: join_result
+
+- name: Wait for worker to become Ready
+  kubernetes.core.k8s_info:
+    kind: Node
+    name: "{{ inventory_hostname }}"
+  delegate_to: "{{ groups['k8s_masters'][0] }}"
+  register: node_status
+  until: >-
+    node_status.resources | length > 0 and
+    (
+      node_status.resources[0].status.conditions
+      | selectattr('type', 'equalto', 'Ready')
+      | map(attribute='status')
+      | first
+    ) == 'True'
+  retries: 30
+  delay: 10
+  when: not node_check.stat.exists

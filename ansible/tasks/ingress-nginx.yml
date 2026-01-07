@@ -1,0 +1,84 @@
+- name: Install Ingress NGINX (HA mode)
+  kubernetes.core.helm:
+    name: ingress-nginx
+    chart_ref: ingress-nginx/ingress-nginx
+    release_namespace: ingress-nginx
+    create_namespace: true
+    wait: false
+    values:
+      controller:
+        replicaCount: 2
+        service:
+          type: LoadBalancer
+        admissionWebhooks:
+          enabled: false
+        podAntiAffinity:
+          type: soft
+        tolerations:
+          - operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - operator: Exists
+            effect: NoSchedule
+          - key: CriticalAddonsOnly
+            operator: Exists
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+        config:
+          worker-processes: "auto"
+          keep-alive: "75"
+          proxy-next-upstream: "error timeout http_502 http_503 http_504"
+          proxy-next-upstream-tries: "3"
+          proxy-next-upstream-timeout: "10s"
+          proxy-connect-timeout: "5s"
+          proxy-read-timeout: "60s"
+          proxy-send-timeout: "60s"
+          upstream-max-fails: "1"
+          fail-timeout: "5s"
+        terminationGracePeriodSeconds: 10
+        updateStrategy:
+          rollingUpdate:
+            maxUnavailable: 1
+        livenessProbe:
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+- name: Create PodDisruptionBudget for ingress-nginx
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: ingress-nginx-pdb
+        namespace: ingress-nginx
+      spec:
+        minAvailable: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/component: controller
+
+- name: Wait for Ingress NGINX pods
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: ingress-nginx
+    label_selectors:
+      - app.kubernetes.io/component=controller
+  register: ingress_pods
+  until: ingress_pods.resources | length >= 1 and (ingress_pods.resources | map(attribute='status.phase') | list | unique) == ['Running']
+  retries: 10
+  delay: 5

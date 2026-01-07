@@ -1,0 +1,7 @@
+- name: Deploy optimized kube-controller-manager (single-master)
+  copy:
+    src: files/kube-controller-manager.yaml
+    dest: /etc/kubernetes/manifests/kube-controller-manager.yaml
+    owner: root
+    group: root
+    mode: "0644"

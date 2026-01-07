@@ -1,0 +1,46 @@
+---
+- name: Prepare all nodes
+  hosts: k8s_cluster
+  become: yes
+  tasks:
+    - include_tasks: tasks/common.yml
+
+- name: Initialize control plane
+  hosts: k8s_masters
+  become: yes
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  tasks:
+    - include_tasks: tasks/master-init.yml
+    - include_tasks: tasks/kube-controller-manager.yml
+    - include_tasks: tasks/calico.yml
+
+- name: Join worker nodes
+  hosts: k8s_workers
+  become: yes
+  tasks:
+    - include_tasks: tasks/worker-join.yml
+
+- name: Install cluster components
+  hosts: k8s_masters
+  become: yes
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+  vars_files:
+    - ../terraform/vars/common.yml
+  tasks:
+    - block:
+        - name: Load AWS Credentials
+          set_fact:
+            aws_access_key: "{{ lookup('ini', 'aws_access_key_id section=default file=' + lookup('env', 'HOME') + '/.aws/credentials') }}"
+            aws_secret_key: "{{ lookup('ini', 'aws_secret_access_key section=default file=' + lookup('env', 'HOME') + '/.aws/credentials') }}"
+          tags: [always]
+
+        - include_tasks: tasks/helm.yml
+        - include_tasks: tasks/cert-manager.yml
+        - include_tasks: tasks/storage.yml
+        - include_tasks: tasks/metallb.yml
+        - include_tasks: tasks/ingress-nginx.yml
+        - include_tasks: tasks/argocd.yml
+        - include_tasks: tasks/aws.yml
+      run_once: true

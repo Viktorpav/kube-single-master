@@ -1,0 +1,30 @@
+- name: Download Calico manifest
+  get_url:
+    url: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
+    dest: /etc/kubernetes/calico.yaml
+    mode: "0644"
+
+- name: Apply Calico CNI
+  kubernetes.core.k8s:
+    src: /etc/kubernetes/calico.yaml
+    state: present
+  run_once: true
+
+- name: Wait for Calico CRDs
+  command: kubectl wait --for=condition=Established crd/ippools.crd.projectcalico.org --timeout=60s
+  run_once: true
+  changed_when: false
+  
+- name: Wait for Calico node pods to be ready
+  kubernetes.core.k8s_info:
+    kind: Pod
+    namespace: kube-system
+    label_selectors:
+      - k8s-app=calico-node
+  register: calico_pods
+  until: >
+    calico_pods.resources | length > 0 and
+    (calico_pods.resources | map(attribute='status.phase') | list | unique) == ['Running']
+  retries: 20
+  delay: 15
+  run_once: true

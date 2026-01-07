@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-controller-manager
+  namespace: kube-system
+  labels:
+    component: kube-controller-manager
+    tier: control-plane
+spec:
+  hostNetwork: true
+  priorityClassName: system-node-critical
+  containers:
+    - name: kube-controller-manager
+      image: registry.k8s.io/kube-controller-manager:v1.35.0
+      command:
+        - kube-controller-manager
+        - --kubeconfig=/etc/kubernetes/controller-manager.conf
+        - --authentication-kubeconfig=/etc/kubernetes/controller-manager.conf
+        - --authorization-kubeconfig=/etc/kubernetes/controller-manager.conf
+        - --node-monitor-period=5s
+        - --node-monitor-grace-period=20s
+        - --node-startup-grace-period=30s
+        - --kube-api-qps=50
+        - --kube-api-burst=100
+        - --terminated-pod-gc-threshold=50
+        - --leader-elect=false
+        - --bind-address=0.0.0.0
+        - --secure-port=10257
+        - --allocate-node-cidrs=true
+        - --cluster-cidr=10.244.0.0/16
+        - --use-service-account-credentials=true
+        - --client-ca-file=/etc/kubernetes/pki/ca.crt
+        - --cluster-signing-cert-file=/etc/kubernetes/pki/ca.crt
+        - --cluster-signing-key-file=/etc/kubernetes/pki/ca.key
+        - --root-ca-file=/etc/kubernetes/pki/ca.crt
+        - --service-account-private-key-file=/etc/kubernetes/pki/sa.key
+        - --controllers=*,bootstrapsigner,tokencleaner
+        - --v=2
+      livenessProbe:
+        httpGet:
+          scheme: HTTPS
+          host: 127.0.0.1
+          path: /healthz
+          port: 10257
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        timeoutSeconds: 5
+      readinessProbe:
+        httpGet:
+          scheme: HTTPS
+          host: 127.0.0.1
+          path: /healthz
+          port: 10257
+        initialDelaySeconds: 5
+        periodSeconds: 10
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      volumeMounts:
+        - mountPath: /etc/kubernetes/pki
+          name: k8s-certs
+          readOnly: true
+        - mountPath: /etc/kubernetes/controller-manager.conf
+          name: kubeconfig
+          readOnly: true
+        - mountPath: /etc/ssl/certs
+          name: ca-certs
+          readOnly: true
+        - mountPath: /etc/localtime
+          name: localtime
+          readOnly: true
+  volumes:
+    - name: k8s-certs
+      hostPath:
+        path: /etc/kubernetes/pki
+        type: DirectoryOrCreate
+    - name: kubeconfig
+      hostPath:
+        path: /etc/kubernetes/controller-manager.conf
+        type: FileOrCreate
+    - name: ca-certs
+      hostPath:
+        path: /etc/ssl/certs
+        type: DirectoryOrCreate
+    - name: localtime
+      hostPath:
+        path: /etc/localtime
+        type: FileOrCreate

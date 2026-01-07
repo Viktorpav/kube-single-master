@@ -1,0 +1,45 @@
+- name: Ensure iooding namespace exists
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: iooding  
+
+- name: Create AWS credentials secret in iooding namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: aws-credentials
+        namespace: iooding
+      type: Opaque
+      stringData:
+        access_key_id: "{{ aws_access_key }}"
+        secret_access_key: "{{ aws_secret_key }}"
+
+- name: Create SecretStore for AWS SSM
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: external-secrets.io/v1
+      kind: SecretStore
+      metadata:
+        name: aws-ssm
+        namespace: iooding
+      spec:
+        provider:
+          aws:
+            service: ParameterStore
+            region: "{{ aws_region }}"
+            auth:
+              secretRef:
+                accessKeyIDSecretRef:
+                  name: aws-credentials
+                  key: access_key_id
+                secretAccessKeySecretRef:
+                  name: aws-credentials
+                  key: secret_access_key
