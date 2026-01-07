@@ -21,4 +21,8 @@
     - { name: argo, url: "https://argoproj.github.io/argo-helm" }
     - { name: longhorn, url: "https://charts.longhorn.io" }
     - { name: jetstack, url: "https://charts.jetstack.io" }
+  register: helm_repo_add
+  until: helm_repo_add is success
+  retries: 5
+  delay: 10
   changed_when: false

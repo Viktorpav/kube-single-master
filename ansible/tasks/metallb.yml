@@ -7,6 +7,9 @@
     wait: true
     timeout: 600s
   register: metallb_install
+  retries: 5
+  delay: 20
+  until: metallb_install is success
 
 - name: Configure MetalLB IP pool and L2 advertisement
   kubernetes.core.k8s:

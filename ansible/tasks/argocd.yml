@@ -124,6 +124,10 @@
 
       redis-ha:
         enabled: false
+  register: argocd_helm_install
+  until: argocd_helm_install is success
+  retries: 5
+  delay: 15
 
 # PodDisruptionBudgets removed to prevent blocking node drains in single-replica home lab setup
 

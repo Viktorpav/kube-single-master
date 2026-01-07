@@ -56,6 +56,11 @@
           timeoutSeconds: 3
           failureThreshold: 2
 
+  register: ingress_helm_install
+  until: ingress_helm_install is success
+  retries: 5
+  delay: 15
+
 # PodDisruptionBudget removed to prevent blocking node drains in single-replica home lab setup
 
 - name: Wait for Ingress NGINX pods

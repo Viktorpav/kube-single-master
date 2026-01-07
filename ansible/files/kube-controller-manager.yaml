@@ -18,8 +18,9 @@ spec:
         - --authentication-kubeconfig=/etc/kubernetes/controller-manager.conf
         - --authorization-kubeconfig=/etc/kubernetes/controller-manager.conf
         - --node-monitor-period=5s
-        - --node-monitor-grace-period=30s
-        - --node-startup-grace-period=45s
+        - --node-monitor-grace-period=20s
+        - --node-startup-grace-period=30s
+        - --pod-eviction-timeout=30s
         - --kube-api-qps=50
         - --kube-api-burst=100
         - --terminated-pod-gc-threshold=10
