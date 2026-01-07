@@ -22,12 +22,15 @@
     values:
       defaultSettings:
         defaultReplicaCount: "{{ longhorn_replicas }}"
-        replicaSoftAntiAffinity: true
         backupTarget: "s3://{{ longhorn_s3_bucket }}@{{ aws_region }}/"
         backupTargetCredentialSecret: aws-secret
         allowRecurringJobWhileVolumeDetached: true
         autoCleanupSystemGeneratedSnapshot: true
         backupstorePollInterval: 30
+        nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
+        rwxVolumeFastFailover: true
+        replicaSoftAntiAffinity: true
+        staleReplicaTimeout: 10
       longhornManager:
         tolerations:
           - key: node.kubernetes.io/unreachable
@@ -39,7 +42,7 @@
             effect: NoExecute
             tolerationSeconds: 10
       ui:
-        replicas: 2
+        replicas: 1
         tolerations:
           - key: node.kubernetes.io/unreachable
             operator: Exists
@@ -77,12 +80,6 @@
         annotations:
           cert-manager.io/cluster-issuer: "iooding-ca-issuer"
           nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-          nginx.ingress.kubernetes.io/configuration-snippet: |
-            add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-            add_header X-Frame-Options "DENY" always;
-            add_header X-Content-Type-Options "nosniff" always;
-            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-            add_header Content-Security-Policy "frame-ancestors 'none';" always;
       spec:
         ingressClassName: nginx
         tls:
