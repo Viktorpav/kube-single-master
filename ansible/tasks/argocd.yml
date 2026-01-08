@@ -5,7 +5,6 @@
     release_namespace: argocd
     create_namespace: true
     wait: false
-    disable_hook: true
     values:
       controller:
         kind: Deployment
@@ -36,6 +35,9 @@
             effect: NoExecute
             tolerationSeconds: 10
 
+      configs:
+        params:
+          server.insecure: "true"
       repoServer:
         replicas: 1
         podAntiAffinity:

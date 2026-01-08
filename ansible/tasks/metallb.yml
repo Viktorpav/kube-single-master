@@ -27,3 +27,7 @@
         metadata:
           name: l2
           namespace: metallb-system
+  register: metallb_config
+  retries: 10
+  delay: 15
+  until: metallb_config is success

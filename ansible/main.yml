@@ -4,6 +4,11 @@
   become: yes
   tasks:
     - include_tasks: tasks/common.yml
+  handlers:
+    - name: Restart containerd
+      ansible.builtin.systemd:
+        name: containerd
+        state: restarted
 
 - name: Initialize control plane
   hosts: k8s_masters
@@ -37,10 +42,17 @@
           tags: [always]
 
         - include_tasks: tasks/helm.yml
+          tags: [helm]
         - include_tasks: tasks/cert-manager.yml
+          tags: [cert-manager]
         - include_tasks: tasks/storage.yml
+          tags: [storage, longhorn]
         - include_tasks: tasks/metallb.yml
+          tags: [metallb]
         - include_tasks: tasks/ingress-nginx.yml
+          tags: [ingress-nginx]
         - include_tasks: tasks/argocd.yml
+          tags: [argocd]
         - include_tasks: tasks/aws.yml
+          tags: [aws]
       run_once: true

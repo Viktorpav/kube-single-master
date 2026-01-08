@@ -1,30 +1,39 @@
-- name: Download Calico manifest
+- name: Download Calico VXLAN manifest
   get_url:
-    url: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
+    url: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico-vxlan.yaml
     dest: /etc/kubernetes/calico.yaml
     mode: "0644"
+    force: yes
 
-- name: Apply Calico CNI
-  kubernetes.core.k8s:
-    src: /etc/kubernetes/calico.yaml
-    state: present
-  run_once: true
+- name: Configure Pod CIDR
+  replace:
+    path: /etc/kubernetes/calico.yaml
+    regexp: '(\s+)# - name: CALICO_IPV4POOL_CIDR\n\s+#   value: "192.168.0.0/16"'
+    replace: '\1- name: CALICO_IPV4POOL_CIDR\n\1  value: "10.244.0.0/16"'
 
-- name: Wait for Calico CRDs
-  command: kubectl wait --for=condition=Established crd/ippools.crd.projectcalico.org --timeout=60s
-  run_once: true
-  changed_when: false
-  
-- name: Wait for Calico node pods to be ready
-  kubernetes.core.k8s_info:
-    kind: Pod
-    namespace: kube-system
-    label_selectors:
-      - k8s-app=calico-node
-  register: calico_pods
-  until: >
-    calico_pods.resources | length > 0 and
-    (calico_pods.resources | map(attribute='status.phase') | list | unique) == ['Running']
+- name: Configure VXLAN Mode
+  replace:
+    path: /etc/kubernetes/calico.yaml
+    regexp: '(\s+)- name: CALICO_IPV4POOL_VXLAN\n\s+value: "CrossSubnet"'
+    replace: '\1- name: CALICO_IPV4POOL_VXLAN\n\1  value: "Always"'
+
+- name: Apply Calico VXLAN manifest
+  command: kubectl apply -f /etc/kubernetes/calico.yaml
+  register: calico_apply
+  retries: 6
+  delay: 10
+  until: calico_apply.rc == 0
+
+- name: Wait for Calico pods to be ready
+  command: kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n kube-system --timeout=300s
+  register: wait_calico
+  retries: 10
+  delay: 30
+  until: wait_calico.rc == 0
+
+- name: Wait for cluster network functionality
+  command: kubectl get nodes -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
+  register: nodes_ready
   retries: 20
   delay: 15
-  run_once: true
+  until: nodes_ready.stdout | regex_search('^True(\s+True)*$')

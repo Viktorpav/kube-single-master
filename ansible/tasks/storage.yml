@@ -1,3 +1,12 @@
+- name: Ensure longhorn-system namespace exists
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: longhorn-system
+
 - name: Create AWS secret for backups (must exist for Longhorn validation)
   kubernetes.core.k8s:
     state: present
@@ -21,18 +30,18 @@
     wait: false
     values:
       defaultSettings:
-        defaultReplicaCount: 2
+        defaultReplicaCount: 1
         backupTarget: "s3://{{ longhorn_s3_bucket }}@{{ aws_region }}/"
         backupTargetCredentialSecret: aws-secret
         allowRecurringJobWhileVolumeDetached: true
         autoCleanupSystemGeneratedSnapshot: true
         backupstorePollInterval: 30
         nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
-        failed-node-set-down-time-interval: 30
+        failed-node-set-down-time-interval: 1
         rwxVolumeFastFailover: true
-        replicaSoftAntiAffinity: false
+        replicaSoftAntiAffinity: true
         replicaReplenishmentWaitInterval: 60
-        staleReplicaTimeout: 10
+        staleReplicaTimeout: 5
         virtio-interface-enabled: true
       longhornManager:
         tolerations:
@@ -67,12 +76,13 @@
             tolerationSeconds: 10
       persistence:
         defaultClass: true
+        defaultClassReplicaCount: 1
   register: longhorn_helm_install
   until: longhorn_helm_install is success
   retries: 5
   delay: 15
 
-- name: Wait for Longhorn manager to be ready (prevents webhook errors)
+- name: Wait for Longhorn manager to be ready (all containers in all pods)
   kubernetes.core.k8s_info:
     kind: Pod
     namespace: longhorn-system
@@ -81,8 +91,15 @@
   register: longhorn_manager_pods
   until: >
     longhorn_manager_pods.resources | length >= 1 and
-    (longhorn_manager_pods.resources | map(attribute='status.phase') | list | unique) == ['Running']
-  retries: 30
+    (longhorn_manager_pods.resources 
+     | selectattr('status.phase', 'equalto', 'Running')
+     | selectattr('status.containerStatuses', 'defined')
+     | map(attribute='status.containerStatuses') 
+     | flatten 
+     | map(attribute='ready') 
+     | list 
+     | unique) == [True]
+  retries: 60
   delay: 10
 
 - name: Create Ingress for Longhorn UI
@@ -133,3 +150,7 @@
           - default
         labels:
           backup: daily
+  register: recurring_job_result
+  retries: 10
+  delay: 20
+  until: recurring_job_result is success

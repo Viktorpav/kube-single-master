@@ -5,30 +5,30 @@
 
 - name: Get join command from master
   command: kubeadm token create --print-join-command
-  register: join_cmd
+  register: join_cmd_raw
   delegate_to: "{{ groups['k8s_masters'][0] }}"
   run_once: true
   changed_when: false
 
+- name: Set join command fact on master
+  set_fact:
+    join_cmd: "{{ join_cmd_raw.stdout }}"
+  delegate_to: "{{ groups['k8s_masters'][0] }}"
+  delegate_facts: true
+  run_once: true
+
 - name: Join worker to cluster
-  command: "{{ hostvars[groups['k8s_masters'][0]]['join_cmd'].stdout }}"
+  command: "{{ hostvars[groups['k8s_masters'][0]]['join_cmd'] }}"
   when: not node_check.stat.exists
   register: join_result
 
 - name: Wait for worker to become Ready
-  kubernetes.core.k8s_info:
-    kind: Node
-    name: "{{ inventory_hostname }}"
+  command: kubectl wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=300s
   delegate_to: "{{ groups['k8s_masters'][0] }}"
-  register: node_status
-  until: >-
-    node_status.resources | length > 0 and
-    (
-      node_status.resources[0].status.conditions
-      | selectattr('type', 'equalto', 'Ready')
-      | map(attribute='status')
-      | first
-    ) == 'True'
-  retries: 30
-  delay: 10
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
   when: not node_check.stat.exists
+  register: wait_node
+  retries: 5
+  delay: 10
+  until: wait_node.rc == 0
