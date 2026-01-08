@@ -47,6 +47,16 @@
   delay: 10
   changed_when: false
 
+- name: Wait for cert-manager webhook to be ready
+  shell: |
+    kubectl wait \
+      --namespace cert-manager \
+      --for=condition=Available \
+      deployment/cert-manager-webhook \
+      --timeout=120s
+  retries: 3
+  delay: 10
+
 - name: Create SelfSigned Bootstrap Issuer
   kubernetes.core.k8s:
     state: present

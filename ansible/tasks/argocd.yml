@@ -98,9 +98,7 @@
       redis:
         enabled: true
         persistence:
-          enabled: true
-          storageClass: longhorn
-          size: 1Gi
+          enabled: false
         tolerations:
           - key: node.kubernetes.io/unreachable
             operator: Exists

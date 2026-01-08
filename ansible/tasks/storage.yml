@@ -30,19 +30,17 @@
     wait: false
     values:
       defaultSettings:
-        defaultReplicaCount: 1
+        defaultReplicaCount: 2
         backupTarget: "s3://{{ longhorn_s3_bucket }}@{{ aws_region }}/"
         backupTargetCredentialSecret: aws-secret
         allowRecurringJobWhileVolumeDetached: true
         autoCleanupSystemGeneratedSnapshot: true
-        backupstorePollInterval: 30
+        backupstorePollInterval: 300
         nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
-        failed-node-set-down-time-interval: 1
-        rwxVolumeFastFailover: true
-        replicaSoftAntiAffinity: true
-        replicaReplenishmentWaitInterval: 60
-        staleReplicaTimeout: 5
-        virtio-interface-enabled: true
+        replicaSoftAntiAffinity: false
+        replicaReplenishmentWaitInterval: 600
+        staleReplicaTimeout: 2880
+        replicaAutoBalance: best-effort
       longhornManager:
         tolerations:
           - key: node.kubernetes.io/unreachable
@@ -76,7 +74,9 @@
             tolerationSeconds: 10
       persistence:
         defaultClass: true
-        defaultClassReplicaCount: 1
+        defaultClassReplicaCount: 2
+        reclaimPolicy: Retain
+
   register: longhorn_helm_install
   until: longhorn_helm_install is success
   retries: 5

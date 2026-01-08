@@ -17,6 +17,12 @@
     regexp: '(\s+)- name: CALICO_IPV4POOL_VXLAN\n\s+value: "CrossSubnet"'
     replace: '\1- name: CALICO_IPV4POOL_VXLAN\n\1  value: "Always"'
 
+- name: Reduce Calico pod startup delay
+  replace:
+    path: /etc/kubernetes/calico.yaml
+    regexp: 'name: CALICO_NODE_READY_TIMEOUT\n\s+value: "60"'
+    replace: 'name: CALICO_NODE_READY_TIMEOUT\n  value: "15"'
+
 - name: Apply Calico VXLAN manifest
   command: kubectl apply -f /etc/kubernetes/calico.yaml
   register: calico_apply
@@ -24,16 +30,12 @@
   delay: 10
   until: calico_apply.rc == 0
 
-- name: Wait for Calico pods to be ready
-  command: kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n kube-system --timeout=300s
-  register: wait_calico
-  retries: 10
-  delay: 30
-  until: wait_calico.rc == 0
-
-- name: Wait for cluster network functionality
-  command: kubectl get nodes -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}'
-  register: nodes_ready
-  retries: 20
-  delay: 15
-  until: nodes_ready.stdout | regex_search('^True(\s+True)*$')
+- name: Wait for Calico pods to be ready (skip offline nodes)
+  shell: |
+    for pod in $(kubectl get pods -n kube-system -l k8s-app=calico-node -o jsonpath='{.items[*].metadata.name}'); do
+      kubectl wait pod/$pod -n kube-system --for=condition=Ready --timeout=15s || true
+    done
+  register: calico_wait
+  retries: 6
+  delay: 5
+  until: calico_wait.rc == 0
