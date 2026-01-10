@@ -1,0 +1,26 @@
+- name: Label worker-1 as storage node
+  kubernetes.core.k8s:
+    state: present
+    kind: Node
+    name: worker-1
+    api_version: v1
+    definition:
+      metadata:
+        labels:
+          node-role.kubernetes.io/storage: "true"
+
+- name: Label and taint worker-2 as stateless
+  kubernetes.core.k8s:
+    state: present
+    kind: Node
+    name: worker-2
+    api_version: v1
+    definition:
+      metadata:
+        labels:
+          node-role.kubernetes.io/stateless: "true"
+      spec:
+        taints:
+          - key: stateless-only
+            value: "true"
+            effect: NoSchedule

@@ -30,17 +30,19 @@
     wait: false
     values:
       defaultSettings:
-        defaultReplicaCount: 2
+        defaultReplicaCount: 1
         backupTarget: "s3://{{ longhorn_s3_bucket }}@{{ aws_region }}/"
         backupTargetCredentialSecret: aws-secret
         allowRecurringJobWhileVolumeDetached: true
         autoCleanupSystemGeneratedSnapshot: true
-        backupstorePollInterval: 300
+        backupstorePollInterval: 30
         nodeDownPodDeletionPolicy: delete-both-statefulset-and-deployment-pod
         replicaSoftAntiAffinity: false
-        replicaReplenishmentWaitInterval: 600
-        staleReplicaTimeout: 2880
-        replicaAutoBalance: best-effort
+        replicaReplenishmentWaitInterval: 60
+        staleReplicaTimeout: 5
+        replicaNodeSoftAntiAffinity: false
+        disableSchedulingOnCordonedNode: true
+        concurrentReplicaRebuildPerNodeLimit: 1
       longhornManager:
         tolerations:
           - key: node.kubernetes.io/unreachable
@@ -74,13 +76,29 @@
             tolerationSeconds: 10
       persistence:
         defaultClass: true
-        defaultClassReplicaCount: 2
+        defaultClassReplicaCount: 1
         reclaimPolicy: Retain
 
   register: longhorn_helm_install
   until: longhorn_helm_install is success
   retries: 5
   delay: 15
+
+- name: Create storage-only Longhorn StorageClass
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: longhorn-storage
+      provisioner: driver.longhorn.io
+      allowVolumeExpansion: true
+      reclaimPolicy: Retain
+      volumeBindingMode: WaitForFirstConsumer
+      parameters:
+        numberOfReplicas: "1"
+        staleReplicaTimeout: "30"
 
 - name: Wait for Longhorn manager to be ready (all containers in all pods)
   kubernetes.core.k8s_info:
