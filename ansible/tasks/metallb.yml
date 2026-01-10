@@ -6,6 +6,21 @@
     create_namespace: true
     wait: true
     timeout: 600s
+    values:
+      controller:
+        tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
+
+      speaker:
+        tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
+
   register: metallb_install
   retries: 5
   delay: 20

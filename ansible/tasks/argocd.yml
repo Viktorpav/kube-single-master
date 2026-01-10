@@ -9,34 +9,34 @@
       controller:
         kind: Deployment
         replicas: 1
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
-          - key: node.kubernetes.io/not-ready
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
 
       server:
         replicas: 1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
         extraArgs:
           - --insecure
-        # Server is stateless - prefer worker-2
-        affinity:
-          nodeAffinity:
-            preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 100
-                preference:
-                  matchExpressions:
-                    - key: node-role.kubernetes.io/stateless
-                      operator: In
-                      values:
-                        - "true"
-        podAntiAffinity:
-          type: soft
-        # Tolerate the stateless-only taint
         tolerations:
           - key: stateless-only
             operator: Equal
@@ -56,19 +56,13 @@
           server.insecure: "true"
       repoServer:
         replicas: 1
-        # Repo Server is stateless - prefer worker-2
-        affinity:
-          nodeAffinity:
-            preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 100
-                preference:
-                  matchExpressions:
-                    - key: node-role.kubernetes.io/stateless
-                      operator: In
-                      values:
-                        - "true"
-        podAntiAffinity:
-          type: soft
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 250m
+            memory: 512Mi
         tolerations:
           - key: stateless-only
             operator: Equal
@@ -82,17 +76,16 @@
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
-        livenessProbe:
-          timeoutSeconds: 10
-          initialDelaySeconds: 30
-        readinessProbe:
-          timeoutSeconds: 10
-          initialDelaySeconds: 30
 
       applicationSet:
         replicas: 1
-        podAntiAffinity:
-          type: soft
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
         tolerations:
           - key: stateless-only
             operator: Equal
@@ -109,6 +102,13 @@
 
       notifications:
         replicas: 1
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
         tolerations:
           - key: stateless-only
             operator: Equal
@@ -124,6 +124,13 @@
             tolerationSeconds: 10
 
       dex:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
         tolerations:
           - key: stateless-only
             operator: Equal
@@ -140,9 +147,21 @@
 
       redis:
         enabled: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
         persistence:
           enabled: false
+        # Redis for ArgoCD is stateless in this setup (no persistence), can run on any node
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
@@ -151,19 +170,6 @@
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
-        resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
-        affinity:
-          podAntiAffinity:
-            preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 100
-                podAffinityTerm:
-                  topologyKey: kubernetes.io/hostname
-                  labelSelector:
-                    matchLabels:
-                      app.kubernetes.io/name: argocd-redis
 
       redis-ha:
         enabled: false

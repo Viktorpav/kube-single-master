@@ -7,44 +7,63 @@
     binary_path: /usr/local/bin/helm
     values:
       installCRDs: true
-      tolerations:
-        - key: stateless-only
-          operator: Equal
-          value: "true"
-          effect: NoSchedule
-        - key: node.kubernetes.io/not-ready
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 10
-        - key: node.kubernetes.io/unreachable
-          operator: Exists
-          effect: NoExecute
-          tolerationSeconds: 10
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+        tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
+          - key: node.kubernetes.io/unreachable
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
       webhook:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
         tolerations:
           - key: stateless-only
             operator: Equal
             value: "true"
             effect: NoSchedule
-          - key: node.kubernetes.io/not-ready
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
+          - key: node.kubernetes.io/not-ready
+            operator: Exists
+            effect: NoExecute
+            tolerationSeconds: 10
+
       cainjector:
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
         tolerations:
           - key: stateless-only
             operator: Equal
             value: "true"
             effect: NoSchedule
-          - key: node.kubernetes.io/not-ready
+          - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
-          - key: node.kubernetes.io/unreachable
+          - key: node.kubernetes.io/not-ready
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
@@ -123,20 +142,24 @@
     values:
       webhook:
         tolerations:
-          - key: node.kubernetes.io/not-ready
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
+          - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
-          - key: node.kubernetes.io/unreachable
+          - key: node.kubernetes.io/not-ready
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
       certController:
         tolerations:
-          - key: node.kubernetes.io/not-ready
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
