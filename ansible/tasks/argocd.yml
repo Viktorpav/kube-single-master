@@ -23,9 +23,25 @@
         replicas: 1
         extraArgs:
           - --insecure
+        # Server is stateless - prefer worker-2
+        affinity:
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                    - key: node-role.kubernetes.io/stateless
+                      operator: In
+                      values:
+                        - "true"
         podAntiAffinity:
           type: soft
+        # Tolerate the stateless-only taint
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
@@ -40,15 +56,24 @@
           server.insecure: "true"
       repoServer:
         replicas: 1
+        # Repo Server is stateless - prefer worker-2
+        affinity:
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                    - key: node-role.kubernetes.io/stateless
+                      operator: In
+                      values:
+                        - "true"
         podAntiAffinity:
           type: soft
-        livenessProbe:
-          timeoutSeconds: 10
-          initialDelaySeconds: 30
-        readinessProbe:
-          timeoutSeconds: 10
-          initialDelaySeconds: 30
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
@@ -57,12 +82,22 @@
             operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
+        livenessProbe:
+          timeoutSeconds: 10
+          initialDelaySeconds: 30
+        readinessProbe:
+          timeoutSeconds: 10
+          initialDelaySeconds: 30
 
       applicationSet:
         replicas: 1
         podAntiAffinity:
           type: soft
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
@@ -75,6 +110,10 @@
       notifications:
         replicas: 1
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute
@@ -86,6 +125,10 @@
 
       dex:
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - key: node.kubernetes.io/unreachable
             operator: Exists
             effect: NoExecute

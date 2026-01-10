@@ -15,6 +15,10 @@
         podAntiAffinity:
           type: soft
         tolerations:
+          - key: stateless-only
+            operator: Equal
+            value: "true"
+            effect: NoSchedule
           - operator: Exists
             effect: NoExecute
             tolerationSeconds: 10
