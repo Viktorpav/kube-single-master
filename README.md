@@ -1,5 +1,8 @@
 # Kubernetes Cluster on UTM (Apple Silicon)
 
+> [!TIP]
+> **View the [Master Project Context](../README.md)** for a high-level overview of the entire infrastructure and application stack.
+
 Automated Kubernetes deployment for MacBook Pro M1/M2/M3 using UTM virtualization, spanning **2 laptops** with **intelligent workload distribution**.
 
 ---
@@ -15,24 +18,26 @@ A complete, automated setup that deploys Kubernetes across 2 MacBooks:
 
 ## 🏗️ Architecture at a Glance
 
-```
-┌─ LAPTOP 1 (MacBook M1 Pro 16GB)      ┌─ LAPTOP 2 (MacBook M1 Pro 16GB)
-│                                       │
-├─ Master-1 (4 CPU, 4GB RAM)          ├─ Worker-2 (4 CPU, 4GB RAM)
-│  └─ Control Plane                    │  └─ Stateless Workloads
-│     ├─ API Server                    │     ├─ ArgoCD UI
-│     ├─ etcd Database                 │     ├─ Ingress Controller
-│     └─ Scheduler                     │     └─ Cert Manager
-│                                      │
-└─ Worker-1 (4 CPU, 4GB RAM)          └─ (Optional: Turn off when not needed)
-   └─ Stateful Workloads
-      ├─ PostgreSQL Database (20GB)
-      ├─ Redis Cache
-      ├─ Blog Media (1GB)
-      └─ Longhorn Storage
+The cluster is designed for high availability across 2 physical MacBooks, with a focus on data persistence.
+
+```mermaid
+graph TB;
+    subgraph "Laptop 1 (MacBook Pro 16GB)"
+        Master1["Master-1 (4 CPU, 4GB RAM)<br/>Control Plane & Storage"]
+        Worker1["Worker-1 (4 CPU, 4GB RAM)<br/>Stateful Workloads (DB, PVC)"]
+    end
+
+    subgraph "Laptop 2 (MacBook Pro 16GB)"
+        Worker2["Worker-2 (4 CPU, 4GB RAM)<br/>Stateless Workloads (UI, Apps)"]
+    end
+
+    Master1 -- "API & etcd" --> Worker1
+    Master1 -- "API & etcd" --> Worker2
+    Worker1 -- "Distributed Storage" --> Longhorn["Longhorn<br/>(Replicas on Master/Worker-1)"]
+    Worker2 -- "Stateless" --> Ingress["Ingress-Nginx<br/>(Routing & SSL)"]
 ```
 
-**Key Design**: When Worker-2 is offline, all workloads still run on Worker-1 with zero data loss!
+**Key Design Choice**: Stateful workloads (PostgreSQL, Redis) are pinned to **Worker-1** (storage node). If **Worker-2** (stateless node) goes offline, all services automatically reschedule to Worker-1 with zero data loss.
 
 ---
 
@@ -91,7 +96,7 @@ worker-2 ansible_host=192.168.0.122
 ### Step 4: Deploy Kubernetes
 
 ```bash
-ansible-playbook -i inventory.ini ansible/main.yml
+./setup.sh
 ```
 
 **⏱️ This takes 30-40 minutes. Grab coffee! ☕**
@@ -155,43 +160,37 @@ kube-single-master/
 
 ---
 
-## 🔧 Component Details
+## 🔧 K8s Component Stack
 
-### Control Plane (Master-1)
+### Control Plane & Core Services (Master-1)
+Essential services that keep the cluster running and store its state.
 
-| Component | Purpose | Port |
-|-----------|---------|------|
-| `kube-apiserver` | REST API for all K8s operations | 6443 |
-| `etcd` | Distributed database (cluster state) | 2379 |
-| `kube-controller-manager` | Ensures desired state (replicas, scaling) | 10252 |
-| `kube-scheduler` | Assigns pods to nodes | 10251 |
-| `coredns` | Internal DNS (resolves `postgres:5432` to pod IP) | 53 |
+| Component | Purpose | Port | Deployment |
+|-----------|---------|------|------------|
+| `kube-apiserver` | REST API for all K8s operations | 6443 | Static Pod |
+| `etcd` | Distributed key-value store (State) | 2379 | Static Pod |
+| `kube-scheduler` | Pod placement controller | 10251 | Static Pod |
+| `CoreDNS` | Service discovery and DNS | 53 | Deployment |
 
 ### Data & Storage (Worker-1)
+The "Brain" of the applications, handling persistent data.
 
-| Component | Purpose | Storage |
-|-----------|---------|---------|
-| `Longhorn` | Distributed storage system | Local disk |
-| `CSI Drivers` | Container Storage Interface (K8s ↔ Longhorn) | N/A |
-| `PostgreSQL` | Blog database | 20GB Longhorn PVC |
-| `iooding-blog` | Django app with media | 1GB Longhorn PVC |
+| Component | Purpose | Storage Provider |
+|-----------|---------|------------------|
+| `Longhorn` | Distributed Block Storage | Local Storage |
+| `PostgreSQL` | Blog main database | 20GB Longhorn PVC |
+| `Redis` | Session and Data Caching | 2GB Longhorn PVC |
+| `ArgoCD Controller` | GitOps heart (Stateful) | 1GB Longhorn PVC |
 
 ### Networking & Load Balancing
+External access and internal routing.
 
-| Component | Purpose | Where |
-|-----------|---------|-------|
-| `Calico` | Pod-to-pod networking overlay | All nodes |
-| `MetalLB` | Fake LoadBalancer for local networks | worker-1 |
-| `Ingress-Nginx` | HTTP/HTTPS router | worker-2 (stateless) |
-| `Cert-Manager` | Auto HTTPS certificates | worker-2 (stateless) |
-
-### Application Deployment (GitOps)
-
-| Component | Purpose | State |
-|-----------|---------|-------|
-| `ArgoCD Controller` | Watches GitHub for manifests | worker-1 (stateful) |
-| `ArgoCD Server` | Web UI for ArgoCD | worker-2 (stateless) |
-| `ArgoCD Repo Server` | Clones Git repos | worker-2 (stateless) |
+| Component | Purpose | Traffic Flow |
+|-----------|---------|--------------|
+| `Calico` | Pod-to-Pod Network Fabric | Internal CNI |
+| `MetalLB` | Local LoadBalancer (L2 Mode) | External IP -> Ingress |
+| `Ingress-Nginx` | HTTP/HTTPS Routing | Ingress -> Service |
+| `Cert-Manager` | Let's Encrypt / Self-Signed SSL | Auto TLS |
 
 ---
 

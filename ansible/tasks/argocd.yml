@@ -11,11 +11,11 @@
         replicas: 1
         resources:
           requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
             cpu: 250m
             memory: 512Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
         tolerations:
           - key: stateless-only
             operator: Equal
@@ -30,8 +30,8 @@
         replicas: 1
         resources:
           requests:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 50m
+            memory: 64Mi
           limits:
             cpu: 250m
             memory: 256Mi
@@ -58,8 +58,8 @@
         replicas: 1
         resources:
           requests:
-            cpu: 100m
-            memory: 256Mi
+            cpu: 50m
+            memory: 128Mi
           limits:
             cpu: 250m
             memory: 512Mi
@@ -78,72 +78,13 @@
             tolerationSeconds: 10
 
       applicationSet:
-        replicas: 1
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi
-        tolerations:
-          - key: stateless-only
-            operator: Equal
-            value: "true"
-            effect: NoSchedule
-          - key: node.kubernetes.io/unreachable
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
-          - key: node.kubernetes.io/not-ready
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
+        enabled: false
 
       notifications:
-        replicas: 1
-        resources:
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 100m
-            memory: 128Mi
-        tolerations:
-          - key: stateless-only
-            operator: Equal
-            value: "true"
-            effect: NoSchedule
-          - key: node.kubernetes.io/unreachable
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
-          - key: node.kubernetes.io/not-ready
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
+        enabled: false
 
       dex:
-        resources:
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 100m
-            memory: 128Mi
-        tolerations:
-          - key: stateless-only
-            operator: Equal
-            value: "true"
-            effect: NoSchedule
-          - key: node.kubernetes.io/unreachable
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
-          - key: node.kubernetes.io/not-ready
-            operator: Exists
-            effect: NoExecute
-            tolerationSeconds: 10
+        enabled: false
 
       redis:
         enabled: true

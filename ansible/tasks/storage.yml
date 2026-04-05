@@ -43,6 +43,8 @@
         replicaNodeSoftAntiAffinity: false
         disableSchedulingOnCordonedNode: true
         concurrentReplicaRebuildPerNodeLimit: 1
+        guaranteedEngineManagerCPU: 5
+        guaranteedReplicaManagerCPU: 5
       longhornManager:
         tolerations:
           - key: node.kubernetes.io/unreachable

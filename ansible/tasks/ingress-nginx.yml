@@ -53,5 +53,5 @@
     ingress_pods.resources | length >= 1 and
     ingress_pods.resources[0].status.containerStatuses is defined and
     ingress_pods.resources[0].status.containerStatuses[0].ready
-  retries: 10
-  delay: 5
+  retries: 20
+  delay: 15
